@@ -8,24 +8,37 @@ A lightweight CRM for tracking leads, moving deals through a sales pipeline, and
 
 Click any lead to open its details. From there you can change the stage, edit it, delete it (with undo), and log calls, emails, meetings, or notes. Press `n` anywhere to add a new lead.
 
-## Running it locally
+## How it runs
 
-The app is plain HTML, CSS, and JavaScript (ES modules), with no build step and no dependencies. Browsers only load modules over `http://`, so serve the folder instead of double-clicking `index.html`:
+- **Live (Hostinger):** the browser app talks to a small PHP API in `api/`, which stores everything in MySQL. Everyone signs in, and the whole team shares one set of leads. The app re-checks for teammates' changes every minute and whenever you come back to the tab.
+- **Local preview:** with no PHP server, the app falls back to keeping demo data in your browser's `localStorage`. This is handy for working on the design:
 
-```bash
-# from the project folder
-python3 -m http.server 8000
-# then open http://localhost:8000
+  ```bash
+  python3 -m http.server 8000   # then open http://localhost:8000
+  ```
+
+## Deploying
+
+Pushes to `main` deploy automatically to Hostinger through the GitHub connection in hPanel (Websites → Manage → Advanced → Git).
+
+The database credentials are **not** in this repository. They live in `crm-config.php` in the site's folder on the server, one level above `public_html`, so neither the web nor Git can see them:
+
+```php
+<?php
+return [
+    'db' => ['host' => '127.0.0.1', 'port' => 3306, 'name' => '…', 'user' => '…', 'pass' => '…'],
+    'setup_code' => '…', // one-time code for creating the owner account
+];
 ```
 
-Any static server works, for example `npx serve` if you have Node installed.
+The API creates its tables on first use.
 
-## Data
+## Accounts
 
-The first time the app opens, it loads about 80 realistic demo leads. Their dates are relative to today, so the demo never looks stale. Changes are saved in the browser's `localStorage`, so each browser has its own copy of the data.
-
-- **⋯ menu → Reload demo data** brings the sample data back.
-- **⋯ menu → Delete all leads** starts from an empty CRM.
+- **Owner account:** the first visit shows a setup screen. Creating the owner account needs the setup code from `crm-config.php`, and the screen never appears again once an account exists.
+- **Team members:** admins add people from **⋯ → Team** with a temporary password. Anyone can change their own password from **⋯ → Change password**.
+- **Admin-only actions:** only admins can reload demo data or delete all leads.
+- **Security:** passwords are hashed, sessions are stored hashed in HttpOnly cookies, and failed sign-ins are rate-limited. Every write requires a custom header, which blocks cross-site requests.
 
 ## Project structure
 
@@ -35,10 +48,13 @@ css/styles.css          Design tokens (light + dark) and all styles
 js/app.js               Routing between tabs and top-bar actions
 js/config.js            Stages, sources, and team members. Edit these for your business.
 js/store.js             Data layer: every read and write goes through here
+js/api.js               Fetch wrapper for the PHP API
+api/index.php           API routes
+api/lib/                Database, schema, accounts, and lead logic (not web-accessible)
 js/seed.js              Demo data generator
 js/charts.js            Small HTML/CSS chart helpers with tooltips
 js/utils.js             Safe HTML templating, formatting, CSV
-js/components/          Lead drawer, confirmation dialog, toasts
+js/components/          Lead drawer, sign-in, team panel, dialogs, toasts
 js/views/               Leads, Pipeline, and Analytics tabs
 ```
 
@@ -46,9 +62,3 @@ js/views/               Leads, Pipeline, and Analytics tabs
 
 - **Team, lead sources, and stages:** edit `js/config.js`. A stage's `probability` is used for the weighted pipeline value.
 - **Colors and type:** the design tokens are at the top of `css/styles.css`.
-
-## Hosting and next steps
-
-Because the app is static, you can host it as-is on GitHub Pages, Netlify, Vercel, or Cloudflare Pages. No build settings are needed.
-
-Before several people use it at once, the data needs to live on a server rather than in each browser. `js/store.js` is the only file that touches storage. Replace its functions with API calls (to Supabase, Firebase, or your own backend) and the rest of the app stays as it is. You'll also want sign-in at that point.
