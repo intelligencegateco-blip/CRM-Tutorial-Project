@@ -40,6 +40,15 @@ The API creates its tables on first use.
 - **Admin-only actions:** only admins can reload demo data or delete all leads.
 - **Security:** passwords are hashed, sessions are stored hashed in HttpOnly cookies, and failed sign-ins are rate-limited. Every write requires a custom header, which blocks cross-site requests.
 
+## Data
+
+The sample data is about 80 realistic leads. Their dates are relative to today, so the demo never looks stale.
+
+- **⋯ → Reload demo data** replaces every lead with the sample set.
+- **⋯ → Delete all leads** starts from an empty CRM.
+
+Deleted leads can be undone for a few seconds. They're kept in the database for 30 days, then purged.
+
 ## Project structure
 
 ```
