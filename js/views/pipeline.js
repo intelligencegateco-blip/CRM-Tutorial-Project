@@ -130,6 +130,8 @@ function onCardKey(e) {
 
 function render() {
   if (!root) return;
+  // Keep keyboard focus on the same card across re-renders.
+  focusAfterRender ??= document.activeElement?.closest?.('[data-card]')?.dataset.card || null;
   const leads = visibleLeads();
   const open = leads.filter((l) => stageById[l.stage].open);
   const openValue = open.reduce((s, l) => s + l.value, 0);

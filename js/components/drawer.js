@@ -16,6 +16,13 @@ function open(markup) {
   if (!d.open) d.showModal();
 }
 
+/** Show arbitrary content (team, password) in the drawer. */
+export function openPanel(markup) {
+  currentLeadId = null;
+  dialog().dataset.mode = 'panel';
+  open(markup);
+}
+
 export function closeDrawer() {
   currentLeadId = null;
   const d = dialog();
@@ -32,8 +39,13 @@ export function setupDrawer() {
   // Keep an open detail view in sync with changes made elsewhere.
   store.subscribe((change) => {
     if (!currentLeadId || !d.open || d.dataset.mode !== 'detail') return;
-    if (change.type === 'delete' && change.id === currentLeadId) return closeDrawer();
-    if (change.id === currentLeadId || change.type === 'reset') openLeadDetail(currentLeadId);
+    if (!['delete', 'reset', 'sync', 'update', 'move', 'activity'].includes(change.type)) return;
+    if (change.type !== 'reset' && change.id !== currentLeadId) return;
+    if (!store.getLead(currentLeadId)) return closeDrawer();
+    // The server's saved copy arriving shouldn't wipe a note being typed.
+    const typing = d.querySelector('textarea')?.value.trim();
+    if (change.type === 'sync' && typing) return;
+    openLeadDetail(currentLeadId);
   });
 }
 
@@ -103,7 +115,7 @@ export function openLeadDetail(id) {
           ${lead.activities.map((a) => html`
             <li class="timeline-item" data-type="${a.type}">
               <span class="timeline-type">${activityLabel[a.type] || a.type}</span>
-              <p>${a.text}</p>
+              <p>${a.text}${a.by && a.type !== 'stage' && a.type !== 'created' ? html`<span class="timeline-by">Logged by ${a.by}</span>` : ''}</p>
               <time datetime="${a.at}">${formatRelative(a.at)}</time>
             </li>`)}
         </ol>

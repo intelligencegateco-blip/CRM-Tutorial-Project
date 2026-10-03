@@ -1,7 +1,7 @@
 // Demo data generator. Deterministic (seeded RNG) so every fresh install looks
 // the same, but dates are relative to today so the data never goes stale.
 
-import { STAGES, SOURCES, OWNERS } from './config.js';
+import { STAGES, SOURCES, DEMO_OWNERS } from './config.js';
 import { DAY } from './utils.js';
 
 function mulberry32(seed) {
@@ -107,7 +107,7 @@ export function generateSeedData(count = 84) {
       email: `${first.toLowerCase()}.${last.toLowerCase()}@${domain}`,
       phone: `(${200 + Math.floor(rng() * 700)}) ${100 + Math.floor(rng() * 900)}-${String(Math.floor(rng() * 10000)).padStart(4, '0')}`,
       source: pick(SOURCES),
-      owner: pick(OWNERS),
+      owner: pick(DEMO_OWNERS),
       stage,
       value,
       notes: pick(LEAD_NOTES),

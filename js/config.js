@@ -16,7 +16,12 @@ export const stageIndex = (id) => STAGES.findIndex((s) => s.id === id);
 
 export const SOURCES = ['Website', 'Referral', 'LinkedIn', 'Cold outreach', 'Event', 'Partner'];
 
-export const OWNERS = ['Priya Shah', 'Marcus Bell', 'Elena Ortiz', 'Tom Okafor'];
+// Sample team used by the demo data and when running without the server.
+export const DEMO_OWNERS = ['Priya Shah', 'Marcus Bell', 'Elena Ortiz', 'Tom Okafor'];
+
+// Names offered in "Owner" pickers. Filled from team accounts and existing
+// leads once data loads (see store.js), so keep it as one mutable array.
+export const OWNERS = [...DEMO_OWNERS];
 
 export const ACTIVITY_TYPES = [
   { id: 'note', label: 'Note' },

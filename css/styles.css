@@ -1007,6 +1007,59 @@ dialog::backdrop { background: var(--backdrop); }
 }
 .toast-action:hover { background: color-mix(in srgb, var(--surface) 26%, transparent); }
 
+/* ---------- Sign-in, setup & account ---------- */
+
+.is-signed-out .tabs,
+.is-signed-out .topbar-actions { display: none; }
+
+.loading { padding: 80px var(--gutter); color: var(--ink-3); text-align: center; }
+
+.auth {
+  display: grid;
+  place-items: start center;
+  min-height: calc(100vh - var(--topbar-h));
+  padding: clamp(32px, 10vh, 96px) var(--gutter) 48px;
+}
+.auth-card {
+  display: grid;
+  gap: 14px;
+  width: min(420px, 100%);
+  padding: 28px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.auth-brand { display: none; }
+.auth-card h1 { font-size: var(--text-xl); font-weight: 750; letter-spacing: -0.02em; }
+.auth-lede { color: var(--ink-2); margin-top: -6px; }
+.auth-error, .form-error {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--danger-soft);
+  color: var(--bad-text);
+  font-weight: 500;
+}
+.auth-submit { width: 100%; min-height: 42px; margin-top: 4px; }
+.field-hint { margin-top: -8px; color: var(--ink-3); font-size: var(--text-sm); }
+.check { display: flex; align-items: flex-start; gap: 10px; color: var(--ink-2); font-size: var(--text-sm); cursor: pointer; }
+.check input { width: 16px; height: 16px; min-height: 0; margin: 2px 0 0; accent-color: var(--accent); }
+
+.menu-user { display: flex; flex-direction: column; padding: 8px 10px 10px; font-size: var(--text-sm); }
+.menu-user span { color: var(--ink-3); overflow-wrap: anywhere; }
+.menu-sep { height: 1px; margin: 6px 4px; background: var(--line); }
+
+.timeline-by { display: block; margin-top: 2px; color: var(--ink-3); font-size: var(--text-xs); }
+
+.team-list { display: grid; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.team-list li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.team-who { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.team-who span { color: var(--ink-3); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.team-role { color: var(--ink-2); font-size: var(--text-sm); }
+.avatar-lg { width: 34px; height: 34px; font-size: var(--text-xs); flex: none; }
+.team-form { display: grid; gap: 14px; padding-top: 6px; }
+.team-form h3 { margin-bottom: -6px; }
+.team-form .btn-primary { justify-self: start; }
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 1080px) {

@@ -1,0 +1,17 @@
+Options -Indexes
+
+# Keep repository and config files off the web
+<FilesMatch "(^\.|\.(md|json|lock|log|sql|sh)$)">
+  Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "same-origin"
+  Header always set X-Frame-Options "DENY"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  # Revalidate app files so a deploy shows up right away
+  <FilesMatch "\.(html|js|css)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>
