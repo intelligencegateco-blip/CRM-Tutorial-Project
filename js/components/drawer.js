@@ -60,6 +60,7 @@ export function openLeadDetail(id) {
   dialog().dataset.mode = 'detail';
   const stage = stageById[lead.stage];
   const overdue = stage.open && lead.nextFollowUp && lead.nextFollowUp < new Date().toISOString().slice(0, 10);
+  const editable = store.canEdit();
 
   open(html`
     <div class="drawer-inner">
@@ -72,7 +73,7 @@ export function openLeadDetail(id) {
         <button class="btn btn-icon" type="button" data-close aria-label="Close">${closeIcon}</button>
       </header>
 
-      <div class="detail-actions">
+      ${editable ? html`<div class="detail-actions">
         <label class="stage-picker">
           <span class="visually-hidden">Stage</span>
           <span class="stage-dot" data-stage="${lead.stage}"></span>
@@ -82,7 +83,7 @@ export function openLeadDetail(id) {
         </label>
         <button class="btn" type="button" data-edit>Edit</button>
         <button class="btn btn-ghost-danger" type="button" data-delete>Delete</button>
-      </div>
+      </div>` : html`<div class="detail-actions"><span class="stage-pill" data-stage="${lead.stage}">${stage.label}</span><span class="muted">You have view-only access.</span></div>`}
 
       <dl class="facts">
         <div><dt>Deal value</dt><dd class="fact-value">${formatCurrency(lead.value)}</dd></div>
@@ -97,7 +98,7 @@ export function openLeadDetail(id) {
 
       ${lead.notes ? html`<section class="detail-notes"><h3>Notes</h3><p>${lead.notes}</p></section>` : ''}
 
-      <section class="log">
+      ${editable ? html`<section class="log">
         <h3>Log activity</h3>
         <form class="log-form" data-log>
           <div class="segmented" role="radiogroup" aria-label="Activity type">
@@ -107,7 +108,7 @@ export function openLeadDetail(id) {
           <textarea id="log-text" name="text" rows="2" placeholder="What happened? e.g. Called to confirm the demo date" required></textarea>
           <button class="btn btn-primary" type="submit">Log activity</button>
         </form>
-      </section>
+      </section>` : ''}
 
       <section class="timeline">
         <h3>History</h3>
@@ -124,6 +125,7 @@ export function openLeadDetail(id) {
 
   const d = dialog();
   d.querySelector('[data-close]').addEventListener('click', closeDrawer);
+  if (!editable) return;
   d.querySelector('[data-field="stage"]').addEventListener('change', (e) => {
     store.moveLead(id, e.target.value);
     toast(`Moved ${lead.name} to ${stageById[e.target.value].label}`);
@@ -151,6 +153,7 @@ export function deleteWithUndo(id) {
 /* ---------- Create / edit form ---------- */
 
 export function openLeadForm(id = null, defaults = {}) {
+  if (!store.canEdit()) return;
   const lead = id ? store.getLead(id) : { stage: 'new', owner: OWNERS[0], source: SOURCES[0], value: '', ...defaults };
   currentLeadId = id;
   dialog().dataset.mode = 'form';

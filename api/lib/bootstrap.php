@@ -14,7 +14,9 @@ const STAGES = [
 ];
 const OPEN_STAGES = ['new', 'contacted', 'qualified', 'proposal', 'negotiation'];
 const ACTIVITY_TYPES = ['note', 'call', 'email', 'meeting'];
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
+// owner: everything, including user access (exactly one). editor: work on leads. viewer: read-only.
+const ROLES = ['owner', 'editor', 'viewer'];
 
 date_default_timezone_set('UTC');
 ini_set('display_errors', '0');
@@ -102,9 +104,35 @@ function db(): PDO
 function migrate(PDO $pdo): void
 {
     $pdo->exec('CREATE TABLE IF NOT EXISTS meta (k VARCHAR(50) PRIMARY KEY, v TEXT NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
-    $version = (int) ($pdo->query("SELECT v FROM meta WHERE k = 'schema_version'")->fetchColumn() ?: 0);
-    if ($version >= SCHEMA_VERSION) return;
+    $readVersion = fn () => (int) ($pdo->query("SELECT v FROM meta WHERE k = 'schema_version'")->fetchColumn() ?: 0);
+    if ($readVersion() >= SCHEMA_VERSION) return;
 
+    // Only one request migrates at a time.
+    $pdo->query("SELECT GET_LOCK('crm_migrate', 15)")->fetchColumn();
+    try {
+        $version = $readVersion();
+        if ($version < 1) migrate_v1($pdo);
+        if ($version < 2) migrate_v2($pdo);
+        $pdo->prepare("REPLACE INTO meta (k, v) VALUES ('schema_version', ?)")->execute([(string) SCHEMA_VERSION]);
+    } finally {
+        $pdo->query("SELECT RELEASE_LOCK('crm_migrate')")->fetchColumn();
+    }
+}
+
+/** v2: owner/editor/viewer roles and the ability to turn someone's access off. */
+function migrate_v2(PDO $pdo): void
+{
+    $pdo->exec('ALTER TABLE users ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1');
+    // The account created at setup (the first admin) becomes the one owner.
+    $ownerId = $pdo->query("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at, id LIMIT 1")->fetchColumn()
+        ?: $pdo->query('SELECT id FROM users ORDER BY created_at, id LIMIT 1')->fetchColumn();
+    $pdo->exec("UPDATE users SET role = 'editor'");
+    if ($ownerId) $pdo->prepare("UPDATE users SET role = 'owner' WHERE id = ?")->execute([$ownerId]);
+}
+
+/** v1: the original tables. */
+function migrate_v1(PDO $pdo): void
+{
     $opts = 'ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
     $pdo->exec("CREATE TABLE IF NOT EXISTS users (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -171,9 +199,6 @@ function migrate(PDO $pdo): void
         INDEX (lead_id, at),
         FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
     ) $opts");
-
-    $set = $pdo->prepare("REPLACE INTO meta (k, v) VALUES ('schema_version', ?)");
-    $set->execute([(string) SCHEMA_VERSION]);
 }
 
 /* ---------- Time & ids ---------- */

@@ -22,7 +22,10 @@ let pending = 0;
 export const getMode = () => mode;
 export const getUser = () => session.user;
 export const getUsers = () => session.users;
-export const isAdmin = () => mode === 'local' || session.user?.role === 'admin';
+/** Owner: manages user access and bulk data. Without the server, this browser is the owner. */
+export const isOwner = () => mode === 'local' || session.user?.role === 'owner';
+/** Owner and editors can change leads; viewers are read-only. */
+export const canEdit = () => mode === 'local' || ['owner', 'editor'].includes(session.user?.role);
 export const hasPendingSaves = () => pending > 0;
 
 export function subscribe(fn) {
@@ -99,19 +102,19 @@ export async function changePassword(current, password) {
   await api('POST', 'account/password', { current, password });
 }
 
-export async function addUser(user) {
-  const data = await api('POST', 'users', user);
+/* User access (owner only; the server enforces it too) */
+
+async function usersRequest(method, path, body) {
+  const data = await api(method, path, body);
   session.users = data.users;
   refreshOwners();
   emit({ type: 'users' });
 }
 
-export async function removeUser(id) {
-  const data = await api('DELETE', `users/${id}`);
-  session.users = data.users;
-  refreshOwners();
-  emit({ type: 'users' });
-}
+export const addUser = (user) => usersRequest('POST', 'users', user);
+export const updateUser = (id, patch) => usersRequest('PATCH', `users/${id}`, patch);
+export const resetUserPassword = (id, password) => usersRequest('POST', `users/${id}/password`, { password });
+export const removeUser = (id) => usersRequest('DELETE', `users/${id}`);
 
 /** Owner choices: team accounts first, then anyone already owning a lead. */
 function refreshOwners() {
@@ -246,7 +249,7 @@ export function restoreLead({ lead, index }) {
   sync(() => api('POST', `leads/${lead.id}/restore`));
 }
 
-/** Replace every lead with the demo set. Admin only on the server. */
+/** Replace every lead with the demo set. Owner only on the server. */
 export async function resetDemoData() {
   const leads = generateSeedData();
   if (mode === 'api') {

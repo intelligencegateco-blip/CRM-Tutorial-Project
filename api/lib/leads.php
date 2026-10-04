@@ -152,12 +152,12 @@ function lock_lead(string $id): array
 function route_bootstrap(): array
 {
     $user = require_user();
-    return ['user' => $user, 'users' => list_users(), 'leads' => load_leads()];
+    return ['user' => $user, 'users' => users_for($user), 'leads' => load_leads()];
 }
 
 function route_create_lead(): array
 {
-    $user = require_user();
+    $user = require_editor();
     $in = body();
     $data = clean_lead_input($in, false);
     $id = $in['id'] ?? new_id('lead');
@@ -189,7 +189,7 @@ function route_create_lead(): array
 
 function route_update_lead(string $id): array
 {
-    $user = require_user();
+    $user = require_editor();
     $data = clean_lead_input(body(), true);
     $pdo = db();
     $pdo->beginTransaction();
@@ -225,7 +225,7 @@ function route_update_lead(string $id): array
 
 function route_add_activity(string $id): array
 {
-    $user = require_user();
+    $user = require_editor();
     $in = body();
     $type = $in['type'] ?? '';
     $text = is_string($in['text'] ?? null) ? trim($in['text']) : '';
@@ -255,7 +255,7 @@ function route_add_activity(string $id): array
 /** Soft delete so "Undo" can restore it. Deleted leads are purged after 30 days. */
 function route_delete_lead(string $id): array
 {
-    require_user();
+    require_editor();
     $now = now_db();
     $st = db()->prepare('UPDATE leads SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL');
     $st->execute([$now, $id]);
@@ -266,16 +266,16 @@ function route_delete_lead(string $id): array
 
 function route_restore_lead(string $id): array
 {
-    require_user();
+    require_editor();
     $st = db()->prepare('UPDATE leads SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL');
     $st->execute([$id]);
     return ['lead' => load_lead($id)];
 }
 
-/** Admin only: replace every lead with the given set (used to load demo data). */
+/** Owner only: replace every lead with the given set (used to load demo data). */
 function route_replace_leads(): array
 {
-    $user = require_admin();
+    $user = require_owner();
     $incoming = body()['leads'] ?? null;
     if (!is_array($incoming) || count($incoming) > MAX_IMPORT) fail(422, 'Send up to ' . MAX_IMPORT . ' leads.');
 
@@ -319,7 +319,7 @@ function route_replace_leads(): array
 
 function route_clear_leads(): array
 {
-    require_admin();
+    require_owner();
     db()->exec('DELETE FROM leads');
     return ['leads' => []];
 }

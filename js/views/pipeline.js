@@ -54,7 +54,9 @@ function mount(container) {
         <div class="flow-bar" data-flow></div>
       </section>
 
-      <p class="board-hint" id="board-hint">Drag a card to another column to change its stage. With the keyboard, focus a card and press the left or right arrow.</p>
+      <p class="board-hint" id="board-hint">${store.canEdit()
+        ? 'Drag a card to another column to change its stage. With the keyboard, focus a card and press the left or right arrow.'
+        : 'You have view-only access, so cards can’t be moved. Open a card to see its details.'}</p>
       <div class="board" data-board></div>
     </div>`;
 
@@ -69,7 +71,7 @@ function mount(container) {
   board.addEventListener('keydown', onCardKey);
   board.addEventListener('dragstart', (e) => {
     const card = e.target.closest('[data-card]');
-    if (!card) return;
+    if (!card || !store.canEdit()) return;
     draggingId = card.dataset.card;
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', draggingId);
@@ -119,7 +121,7 @@ function onCardKey(e) {
     openLeadDetail(card.dataset.card);
     return;
   }
-  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  if ((e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || !store.canEdit()) return;
   e.preventDefault();
   const lead = store.getLead(card.dataset.card);
   const next = STAGES[stageIndex(lead.stage) + (e.key === 'ArrowRight' ? 1 : -1)];
@@ -158,7 +160,7 @@ function render() {
           ${s.open ? '' : html`<p class="column-note">Closed in the last ${CLOSED_WINDOW_DAYS} days</p>`}
         </header>
         <ul class="cards" role="list">
-          ${items.length ? items.map(card) : html`<li class="column-empty">${s.open ? 'Drop a deal here' : 'Nothing closed recently'}</li>`}
+          ${items.length ? items.map(card) : html`<li class="column-empty">${!s.open ? 'Nothing closed recently' : store.canEdit() ? 'Drop a deal here' : 'No deals'}</li>`}
         </ul>
       </section>`;
   })}`;
@@ -176,7 +178,7 @@ function card(l) {
   const stale = open && days >= 21;
   return html`
     <li>
-      <article class="deal" tabindex="0" draggable="true" data-card="${l.id}" aria-describedby="board-hint"
+      <article class="deal" tabindex="0" draggable="${store.canEdit()}" data-card="${l.id}" aria-describedby="board-hint"
         aria-label="${l.company}, ${l.name}, ${formatCurrency(l.value)}, ${stageById[l.stage].label}">
         <div class="deal-top">
           <h4>${l.company}</h4>

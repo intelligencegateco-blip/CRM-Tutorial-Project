@@ -35,9 +35,11 @@ try {
     if ($method === 'GET' && $route === 'bootstrap') respond(route_bootstrap());
 
     if ($p0 === 'users') {
-        if ($method === 'GET' && $count === 1) { require_user(); respond(['users' => list_users()]); }
+        if ($method === 'GET' && $count === 1) respond(['users' => users_for(require_user())]);
         if ($method === 'POST' && $count === 1) respond(route_create_user());
+        if ($method === 'PATCH' && $count === 2) respond(route_update_user($p1));
         if ($method === 'DELETE' && $count === 2) respond(route_delete_user($p1));
+        if ($method === 'POST' && $p2 === 'password' && $count === 3) respond(route_reset_password($p1));
     }
 
     if ($p0 === 'leads') {

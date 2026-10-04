@@ -156,9 +156,9 @@ function renderResults() {
   const results = $('[data-results]', root);
   if (!all.length) {
     results.innerHTML = html`<div class="empty">
-      <h2>Add your first lead</h2>
-      <p>Leads you add show up here and on the pipeline board.</p>
-      <button class="btn btn-primary" type="button" data-add>Add a lead</button>
+      <h2>${store.canEdit() ? 'Add your first lead' : 'No leads yet'}</h2>
+      <p>${store.canEdit() ? 'Leads you add show up here and on the pipeline board.' : 'Leads your team adds will show up here.'}</p>
+      ${store.canEdit() ? html`<button class="btn btn-primary" type="button" data-add>Add a lead</button>` : ''}
     </div>`;
     return;
   }

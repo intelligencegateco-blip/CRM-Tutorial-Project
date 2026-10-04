@@ -21,7 +21,7 @@ function current_user(): ?array
     $token = $_COOKIE[SESSION_COOKIE] ?? '';
     if (!is_string($token) || !preg_match('/^[a-f0-9]{64}$/', $token)) return $user = null;
     $st = db()->prepare('SELECT u.id, u.name, u.email, u.role FROM sessions s JOIN users u ON u.id = s.user_id
-        WHERE s.token_hash = ? AND s.expires_at > ?');
+        WHERE s.token_hash = ? AND s.expires_at > ? AND u.is_active = 1');
     $st->execute([hash('sha256', $token), now_db()]);
     $row = $st->fetch();
     return $user = $row ? public_user($row) : null;
@@ -34,10 +34,19 @@ function require_user(): array
     return $user;
 }
 
-function require_admin(): array
+/** Owner or editor: allowed to change leads. */
+function require_editor(): array
 {
     $user = require_user();
-    if ($user['role'] !== 'admin') fail(403, 'Only an admin can do that.');
+    if (!in_array($user['role'], ['owner', 'editor'], true)) fail(403, 'You have view-only access. Ask the owner if you need to make changes.');
+    return $user;
+}
+
+/** Only the owner manages user access and bulk data actions. */
+function require_owner(): array
+{
+    $user = require_user();
+    if ($user['role'] !== 'owner') fail(403, 'Only the owner can do that.');
     return $user;
 }
 
@@ -138,10 +147,10 @@ function route_setup(): array
     $email = clean_email($in['email'] ?? '');
     $password = check_password_strength($in['password'] ?? '');
     db()->prepare('INSERT INTO users (name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)')
-        ->execute([$name, $email, password_hash($password, PASSWORD_DEFAULT), 'admin', now_db()]);
+        ->execute([$name, $email, password_hash($password, PASSWORD_DEFAULT), 'owner', now_db()]);
     $id = (int) db()->lastInsertId();
     start_session($id);
-    return ['user' => ['id' => $id, 'name' => $name, 'email' => $email, 'role' => 'admin']];
+    return ['user' => ['id' => $id, 'name' => $name, 'email' => $email, 'role' => 'owner']];
 }
 
 function route_login(): array
@@ -157,6 +166,9 @@ function route_login(): array
     if (!$row || !password_verify($password, $row['password_hash'])) {
         record_failure($email);
         fail(401, 'That email and password don’t match an account.');
+    }
+    if (!(int) $row['is_active']) {
+        fail(403, 'Your access to this CRM is turned off. Ask the owner to turn it back on.');
     }
     if (password_needs_rehash($row['password_hash'], PASSWORD_DEFAULT)) {
         db()->prepare('UPDATE users SET password_hash = ? WHERE id = ?')
@@ -193,20 +205,54 @@ function route_change_password(): array
     return ['ok' => true];
 }
 
-function list_users(): array
+/** Everyone gets names (for owner pickers); the owner also gets access details. */
+function list_users(bool $full = false): array
 {
-    $rows = db()->query('SELECT id, name, email, role FROM users ORDER BY name')->fetchAll();
-    return array_map('public_user', $rows);
+    $rows = db()->query('SELECT id, name, email, role, is_active, created_at, last_login_at FROM users ORDER BY name')->fetchAll();
+    return array_map(function (array $r) use ($full) {
+        $user = ['id' => (int) $r['id'], 'name' => $r['name'], 'role' => $r['role'], 'active' => (bool) $r['is_active']];
+        if ($full) {
+            $user += ['email' => $r['email'], 'createdAt' => to_iso($r['created_at']), 'lastLoginAt' => to_iso($r['last_login_at'])];
+        }
+        return $user;
+    }, $rows);
+}
+
+function users_for(array $viewer): array
+{
+    return list_users($viewer['role'] === 'owner');
+}
+
+function clean_role($role): string
+{
+    if (!in_array($role, ['editor', 'viewer'], true)) fail(422, 'Choose Editor or Viewer access.', 'role');
+    return $role;
+}
+
+/** Fetch a teammate the owner is allowed to manage (anyone but the owner). */
+function managed_user(string $id): array
+{
+    $st = db()->prepare('SELECT id, name, role FROM users WHERE id = ?');
+    $st->execute([(int) $id]);
+    $row = $st->fetch();
+    if (!$row) fail(404, 'That person no longer has an account.');
+    if ($row['role'] === 'owner') fail(422, 'The owner’s access can’t be changed.');
+    return $row;
+}
+
+function end_sessions_for(int $userId): void
+{
+    db()->prepare('DELETE FROM sessions WHERE user_id = ?')->execute([$userId]);
 }
 
 function route_create_user(): array
 {
-    require_admin();
+    $owner = require_owner();
     $in = body();
     $name = clean_name($in['name'] ?? '');
     $email = clean_email($in['email'] ?? '');
     $password = check_password_strength($in['password'] ?? '');
-    $role = ($in['role'] ?? 'member') === 'admin' ? 'admin' : 'member';
+    $role = clean_role($in['role'] ?? 'editor');
     try {
         db()->prepare('INSERT INTO users (name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)')
             ->execute([$name, $email, password_hash($password, PASSWORD_DEFAULT), $role, now_db()]);
@@ -214,13 +260,40 @@ function route_create_user(): array
         if ($e->getCode() === '23000') fail(409, 'Someone already uses that email.', 'email');
         throw $e;
     }
-    return ['users' => list_users()];
+    return ['users' => users_for($owner)];
+}
+
+/** Change someone's access level, or turn their access off/on. */
+function route_update_user(string $id): array
+{
+    $owner = require_owner();
+    $target = managed_user($id);
+    $in = body();
+    if (array_key_exists('role', $in)) {
+        db()->prepare('UPDATE users SET role = ? WHERE id = ?')->execute([clean_role($in['role']), $target['id']]);
+    }
+    if (array_key_exists('active', $in)) {
+        $active = (bool) $in['active'];
+        db()->prepare('UPDATE users SET is_active = ? WHERE id = ?')->execute([$active ? 1 : 0, $target['id']]);
+        if (!$active) end_sessions_for((int) $target['id']);
+    }
+    return ['users' => users_for($owner)];
+}
+
+function route_reset_password(string $id): array
+{
+    $owner = require_owner();
+    $target = managed_user($id);
+    $password = check_password_strength(body()['password'] ?? '');
+    db()->prepare('UPDATE users SET password_hash = ? WHERE id = ?')->execute([password_hash($password, PASSWORD_DEFAULT), $target['id']]);
+    end_sessions_for((int) $target['id']);
+    return ['users' => users_for($owner)];
 }
 
 function route_delete_user(string $id): array
 {
-    $admin = require_admin();
-    if ((int) $id === $admin['id']) fail(422, 'You can’t remove your own account.');
-    db()->prepare('DELETE FROM users WHERE id = ?')->execute([(int) $id]);
-    return ['users' => list_users()];
+    $owner = require_owner();
+    $target = managed_user($id);
+    db()->prepare('DELETE FROM users WHERE id = ?')->execute([$target['id']]);
+    return ['users' => users_for($owner)];
 }

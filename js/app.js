@@ -3,24 +3,25 @@
 
 import * as store from './store.js';
 import { setupDrawer, openLeadForm, closeDrawer } from './components/drawer.js';
-import { confirmAction } from './components/confirm.js';
 import { toast } from './components/toast.js';
 import { renderAuth, renderFatal } from './components/auth.js';
-import { openTeamPanel, openPasswordPanel } from './components/team.js';
+import { openPasswordPanel } from './components/account.js';
 import { exportLeadsCsv } from './views/leads.js';
 import leadsView from './views/leads.js';
 import pipelineView from './views/pipeline.js';
 import analyticsView from './views/analytics.js';
+import settingsView from './views/settings.js';
 import { $, $$, html } from './utils.js';
 
-const routes = { leads: leadsView, pipeline: pipelineView, analytics: analyticsView };
-const titles = { leads: 'Leads', pipeline: 'Pipeline', analytics: 'Analytics' };
+const routes = { leads: leadsView, pipeline: pipelineView, analytics: analyticsView, settings: settingsView };
+const titles = { leads: 'Leads', pipeline: 'Pipeline', analytics: 'Analytics', settings: 'Settings' };
 const REFRESH_MS = 60000;
 let active = null;
 let signedIn = false;
 
 function currentRoute() {
   const name = location.hash.replace(/^#\/?/, '').split('?')[0];
+  if (name === 'settings' && !store.isOwner()) return 'leads';
   return routes[name] ? name : 'leads';
 }
 
@@ -37,6 +38,10 @@ function navigate() {
     document.title = `${titles[name]} · Groundwork CRM`;
     window.scrollTo(0, 0);
   }
+  $$('[data-route-link]').forEach((link) => {
+    if (link.dataset.routeLink === name) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  });
   $$('.tab').forEach((tab) => {
     const isActive = tab.dataset.route === name;
     tab.classList.toggle('is-active', isActive);
@@ -79,14 +84,19 @@ function enterApp() {
   navigate();
 }
 
+const ROLE_LABELS = { owner: 'Owner', editor: 'Editor', viewer: 'Viewer (view only)' };
+
+/** Show or hide controls for this person's access level. The server enforces the same rules. */
 function renderMenu() {
   const user = store.getUser();
   const apiMode = store.getMode() === 'api';
   $$('[data-api-only]').forEach((el) => { el.hidden = !apiMode; });
-  $$('[data-admin-only]').forEach((el) => { el.hidden = !store.isAdmin(); });
+  $$('[data-owner-only]').forEach((el) => { el.hidden = !store.isOwner(); });
+  document.body.classList.toggle('is-readonly', !store.canEdit());
   if (user) {
     $('[data-user-name]').textContent = user.name;
     $('[data-user-email]').textContent = user.email;
+    $('[data-user-role]').textContent = ROLE_LABELS[user.role] || '';
   }
 }
 
@@ -116,27 +126,12 @@ function setupTopbar() {
         case 'export':
           exportLeadsCsv(store.getLeads());
           break;
-        case 'team':
-          openTeamPanel();
-          break;
         case 'password':
           openPasswordPanel();
           break;
         case 'logout':
           await store.logout();
           showAuth('login');
-          break;
-        case 'reset':
-          if (await confirmAction({ title: 'Reload demo data?', body: 'This replaces every lead, for everyone on the team, with the sample data set. Changes you made will be lost.', confirmLabel: 'Reload demo data' })) {
-            await store.resetDemoData();
-            toast('Demo data reloaded');
-          }
-          break;
-        case 'clear':
-          if (await confirmAction({ title: 'Delete all leads?', body: 'Every lead and its history will be deleted for everyone on the team. This can’t be undone.', confirmLabel: 'Delete all leads' })) {
-            await store.clearAllData();
-            toast('All leads deleted');
-          }
           break;
       }
     } catch (err) {
@@ -147,7 +142,7 @@ function setupTopbar() {
 
   // "n" opens a new lead from anywhere, unless the person is typing.
   document.addEventListener('keydown', (e) => {
-    if (!signedIn || e.key !== 'n' || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!signedIn || !store.canEdit() || e.key !== 'n' || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.target.closest('input, textarea, select, [contenteditable]') || document.querySelector('dialog[open]')) return;
     e.preventDefault();
     openLeadForm();
@@ -171,7 +166,11 @@ store.subscribe((change) => {
     toast(change.message, { duration: 8000 });
     return;
   }
-  if (change.type === 'users') renderMenu();
+  if (change.type === 'users' || change.type === 'reset') {
+    renderMenu();
+    // If the owner changed this person's access, leave pages they can no longer use.
+    if (active?.name === 'settings' && !store.isOwner()) navigate();
+  }
   if (signedIn) active?.view.update?.(change);
 });
 

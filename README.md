@@ -33,12 +33,31 @@ return [
 
 The API creates its tables on first use.
 
-## Accounts
+## Accounts and access
 
-- **Owner account:** the first visit shows a setup screen. Creating the owner account needs the setup code from `crm-config.php`, and the screen never appears again once an account exists.
-- **Team members:** admins add people from **⋯ → Team** with a temporary password. Anyone can change their own password from **⋯ → Change password**.
-- **Admin-only actions:** only admins can reload demo data or delete all leads.
-- **Security:** passwords are hashed, sessions are stored hashed in HttpOnly cookies, and failed sign-ins are rate-limited. Every write requires a custom header, which blocks cross-site requests.
+The **gear button** in the top bar opens **Settings**. Only the owner sees it.
+
+| Access | Can do |
+| --- | --- |
+| **Owner** | Everything, including Settings. There is exactly one owner: the account created at setup. |
+| **Editor** | Add, edit, move, and delete leads, and log activity. |
+| **Viewer** | See leads, the pipeline, and analytics. Can't change anything. |
+
+From Settings, the owner can:
+- add people with a temporary password
+- switch anyone between Editor and Viewer
+- turn someone's access off, which signs them out at once and can be turned back on
+- reset passwords and remove people
+- export, reload demo data, or delete all leads
+
+Everyone can change their own password from **⋯ → Change password**.
+
+**Setup:** the first visit shows a setup screen. Creating the owner account needs the setup code from `crm-config.php`, and the screen never appears again once an account exists.
+
+**Security:**
+- The server enforces every rule above, not just the screens.
+- Passwords are hashed, sessions are stored hashed in HttpOnly cookies, and failed sign-ins are rate-limited.
+- Every write requires a custom header, which blocks cross-site requests.
 
 ## Data
 
